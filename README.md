@@ -1,2 +1,0 @@
-# SFECOMLA
-Praca inżynierska

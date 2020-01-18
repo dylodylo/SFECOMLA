@@ -1,0 +1,1 @@
+To start choose datasets, models and measures and click "test" or draw plots from default scores by "load default scores". If you want more information about dataset/model/measure click "info".
