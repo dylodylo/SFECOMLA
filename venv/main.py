@@ -3,30 +3,54 @@ from PyQt5.uic import loadUiType
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
-import random
-from matplotlib.backends.backend_qt4agg import NavigationToolbar2QT as NavigationToolbar
-import wykresy
-from matplotlib import pyplot as plt
-import numpy as np
+import stat_tests
 import csv
-from collections import Counter
-import pandas as pd
 import datasets
 from functools import partial
+import threading
+import os
 
 #import pliku stworzonego w QtDesigner
 Ui_MainWindow, QMainWindow = loadUiType('prototyp.ui')
+file_path = "test.csv"
+default_path = "default.csv"
+
+class Worker(QRunnable):
+
+    def __init__(self, buttons_list, menu):
+        super(Worker, self).__init__()
+        self.bl = buttons_list
+        self.menu = menu
+
+
+    @pyqtSlot()
+    def run(self):
+        print("Thread start")
+        datasets.dataset_function(self.bl, self.menu)
+        self.menu.graphs_list = self.menu.generate_graphs(file_path, self.bl[1], self.bl[2])
+        self.menu.current_graph = 0
+        if len(self.menu.graphs_list) > 0:
+            self.menu.plot.setPixmap(QtGui.QPixmap(self.menu.graphs_list[self.menu.current_graph]))
+            self.menu.name.setText(self.menu.graphs_names[self.menu.current_graph])
+            self.menu.next.setEnabled(True)
+        print("Thread complete")
 
 
 class Main(QMainWindow, Ui_MainWindow):
     def __init__(self):
+        self.threadpool = QThreadPool()
         QMainWindow.__init__(self)
         Ui_MainWindow.__init__(self)
         self.setupUi(self)
-        self.addToolBar(NavigationToolbar(self.canvas, self)) #toolbar matlopotlib
         self.pushButton.clicked.connect(self.button_action) #wywołanie buttona "test"
         self.textBrowser.setSource(QUrl("../descriptions/welcome.txt")) #załadowanie tekstu o textBrowser
-        self.plot() #rysowanie wykresu
+        self.pushButton_2.clicked.connect(self.button2_action)
+        self.graphs_list = []
+        self.current_graph = 0
+        self.next.setEnabled(False)
+        self.previous.setEnabled(False)
+        self.next.clicked.connect(self.next_action)
+        self.previous.clicked.connect(self.previous_action)
 
         #wywoływanie informacji o danych/algorytmach/miarach
         self.data_info_1.clicked.connect(partial(self.change_text_source, "../descriptions/data1.txt"))
@@ -47,29 +71,11 @@ class Main(QMainWindow, Ui_MainWindow):
         self.measure_info_4.clicked.connect(partial(self.change_text_source, "../descriptions/measure4.txt"))
         self.measure_info_5.clicked.connect(partial(self.change_text_source, "../descriptions/measure5.txt"))
 
-
-
-    def plot(self):
-        data = pd.read_csv('data.csv')
-        ids = data['Responder_id']
-        lang_resposnes = data['LanguagesWorkedWith']
-
-        language_counter = Counter()
-
-        for lang in lang_resposnes:
-            language_counter.update(lang.split(';'))
-
-        languages, popularity = map(list, zip(*language_counter.most_common(15)))
-
-        plt.barh(languages, popularity)
-        plt.title('Languages Popularity')
-        plt.ylabel('Languages')
-        plt.xlabel('Number of people who use')
-        ''' plot some random stuff '''
-        #data = [random.random() for i in range(25)]
-        ax = self.canvas.figure.add_subplot(111)
-        ax.barh(languages, popularity)
-        self.canvas.draw()
+    def closeEvent(self, event):
+        for i in self.graphs_list:
+            os.remove(i)
+        if os.path.exists(file_path):
+            os.remove(file_path)
 
 
     def change_text_source(self, path):
@@ -77,28 +83,92 @@ class Main(QMainWindow, Ui_MainWindow):
 
 
     def button_action(self):
-        btn1 = self.data1.isChecked()
-        btn2 = self.data2.isChecked()
-        btn3 = self.data3.isChecked()
-        btn4 = self.data4.isChecked()
-        btn5 = self.data5.isChecked()
+        box1 = self.data1.isChecked()
+        box2 = self.data2.isChecked()
+        box3 = self.data3.isChecked()
+        box4 = self.data4.isChecked()
+        box5 = self.data5.isChecked()
 
-        btn6 = self.algorithm1.isChecked()
-        btn7 = self.algorithm2.isChecked()
-        btn8 = self.algorithm3.isChecked()
-        btn9 = self.algorithm4.isChecked()
-        btn10 = self.algorithm5.isChecked()
+        box6 = self.algorithm1.isChecked()
+        box7 = self.algorithm2.isChecked()
+        box8 = self.algorithm3.isChecked()
+        box9 = self.algorithm4.isChecked()
+        box10 = self.algorithm5.isChecked()
 
-        btn11 = self.measure1.isChecked()
-        btn12 = self.measure2.isChecked()
-        btn13 = self.measure3.isChecked()
-        btn14 = self.measure4.isChecked()
-        btn15 = self.measure5.isChecked()
+        box11 = self.measure1.isChecked()
+        box12 = self.measure2.isChecked()
+        box13 = self.measure3.isChecked()
+        box14 = self.measure4.isChecked()
+        box15 = self.measure5.isChecked()
 
-        self.send_buttons([[btn1, btn2, btn3, btn4, btn5], [btn6, btn7, btn8, btn9, btn10], [btn11, btn12, btn13, btn14, btn15]])
+        box16 = self.split1.isChecked()
+        box17 = self.split2.isChecked()
+        box18 = self.split3.isChecked()
+        box19 = self.split4.isChecked()
+        box20 = self.split5.isChecked()
 
+        data_checkboxes = [box1, box2, box3, box4, box5]
+        algorithms_checkboxes = [box6, box7, box8, box9, box10]
+        measures_checkboxes = [box11, box12, box13, box14, box15]
+        ratio_checkboxes = [box16, box17, box18, box19, box20]
+
+        if sum(data_checkboxes) > 0 and sum(algorithms_checkboxes) > 2 and sum(measures_checkboxes) > 0 and sum(ratio_checkboxes) > 0:
+            self.textBrowser.setPlainText(
+                "System is working... please wait")
+            self.send_buttons([data_checkboxes, algorithms_checkboxes, measures_checkboxes, ratio_checkboxes])
+
+        else:
+            self.textBrowser.setPlainText("You have to choose at least one database, one split ratio, one measure and three models")
+
+
+    #wysłanie checkboxów do drugiego modułu
     def send_buttons(self, buttons_list):
-        datasets.dataset_function(buttons_list)
+        #wyłączamy pushbuttony
+        self.pushButton.setEnabled(False)
+        self.pushButton_2.setEnabled(False)
+
+        #tworzymy nowy wątek
+        self.worker = Worker(buttons_list, self)
+        self.threadpool.start(self.worker)
+
+
+    #akcja dla przycisku rysującego wykresy dla domyślnych danych
+    def button2_action(self):
+        self.graphs_list = self.generate_graphs(default_path, [True, True, True, True, True], [True, True, True, True, True])
+        self.current_graph = 0
+        if len(self.graphs_list) > 0:
+            self.name.setText(self.graphs_names[self.current_graph])
+            self.plot.setPixmap(QtGui.QPixmap(self.graphs_list[self.current_graph]))
+            self.next.setEnabled(True)
+
+
+    #akcja dla przycisku "next"
+    def next_action(self):
+        self.current_graph += 1
+        self.plot.setPixmap(QtGui.QPixmap(self.graphs_list[self.current_graph]))
+        self.name.setText(self.graphs_names[self.current_graph])
+        if self.current_graph == len(self.graphs_list) - 1:
+            self.next.setEnabled(False)
+        if not self.previous.isEnabled():
+            self.previous.setEnabled(True)
+
+
+    #akcja dla przycisku "previous"
+    def previous_action(self):
+        self.current_graph -= 1
+        self.plot.setPixmap(QtGui.QPixmap(self.graphs_list[self.current_graph]))
+        self.name.setText(self.graphs_names[self.current_graph])
+        if self.current_graph == 0:
+            self.previous.setEnabled(False)
+        if not self.next.isEnabled():
+            self.next.setEnabled(True)
+
+
+    #funkcja wywołująca funkcję z modułu stat_test i dodająca do nazw wykresów rozszerzenie .png
+    def generate_graphs(self, path, algorithms, measures):
+        self.graphs_names = stat_tests.statistic_tests(path, algorithms, measures)
+        graphs = [i+".png" for i in self.graphs_names]
+        return graphs
 
 if __name__ == '__main__':
     import sys
@@ -109,74 +179,3 @@ if __name__ == '__main__':
     main.show()
     sys.exit(app.exec_())
 
-# class MainWindow(QMainWindow):
-#
-#     def __init__(self, *args, **kwargs):
-#         super(MainWindow, self).__init__(*args, **kwargs)
-#
-#         self.setWindowTitle("My Awesome App")
-#         self.setGeometry(50, 50, 500, 300)
-#         self.setWindowIcon(QIcon('bear.jpg'))
-#
-#         extractAction = QAction("GO SOMEWHERE I DONT KNOW WHERE", self)
-#         extractAction.setShortcut("Ctrl+Q")
-#         extractAction.setStatusTip("Leave This App")
-#         extractAction.triggered.connect(self.close_application)
-#         self.statusBar()
-#         mainMenu = self.menuBar()
-#         fileMenu = mainMenu.addMenu('File')
-#         fileMenu.addAction(extractAction)
-#
-#         self.home()
-#
-#     def home(self):
-#         btn = QPushButton("Quit", self)
-#         btn.clicked.connect(self.close_application)
-#         btn.resize(100,100)
-#         btn.move(100,100)
-#
-#         checkBox = QCheckBox('Powiększ okno', self)
-#         checkBox.stateChanged.connect(self.enlargeWindow)
-#         checkBox.move(100,25)
-#
-#         self.progress = QProgressBar(self)
-#         self.progress.setGeometry(200,200, 250, 50)
-#
-#         self.btn = QPushButton("Download", self)
-#         self.btn.move(200,120)
-#         self.btn.clicked.connect(self.download)
-#
-#
-#         self.show()
-#
-#     def download(self):
-#         self.completed = 0
-#         while self.completed < 100:
-#             self.completed += 0.0001
-#             self.progress.setValue(self.completed)
-#
-#     def enlargeWindow(self, state):
-#         if state == Qt.Checked:
-#             self.setGeometry(50,50, 1000,600)
-#         else:
-#             self.setGeometry(50,50, 500,300)
-#
-#     def close_application(self):
-#         choice = QMessageBox.question(self, 'ZAMYKANIE PROGRAMU', 'ARE YOU SURE BRO', QMessageBox.Yes | QMessageBox.No)
-#         if choice == QMessageBox.Yes:
-#             sys.exit()
-#         else:
-#             pass
-#
-#     def closeEvent(self, event):
-#         event.ignore()
-#         self.close_application()
-#
-#
-#
-# app = QApplication(sys.argv)
-#
-# window = MainWindow()
-# window.show()
-#
-# app.exec_()
